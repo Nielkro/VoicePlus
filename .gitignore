@@ -1,0 +1,53 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+
+# local test server
+
+testserver/
+
+# vendored upstream repos (not part of this project)
+
+plasmo-voice/
+simple-voice-chat/
+
+# kotlin
+
+.kotlin/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
