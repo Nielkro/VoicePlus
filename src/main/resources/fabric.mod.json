@@ -3,9 +3,9 @@
 	"id": "voice-plus-pv2svc",
 	"version": "${version}",
 	"name": "Voice Plus (PV2SVC)",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Voice Plus (PV2SVC) - client-side bridge for Simple Voice Chat on servers running Plasmo Voice.",
 	"authors": [
-		"Me!"
+		"Niel_kro"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
