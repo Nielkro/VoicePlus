@@ -44,6 +44,7 @@ object VoicePlusPV2SVC : ClientModInitializer {
 			LOGGER.info("Disconnected from server, stopping UDP proxy clients and virtual servers...")
 			inbound.stop()
 			outbound.disconnect()
+			ru.penik.voice.plus.plugins.SvcConnectionManager.reset()
 		}
 	}
 

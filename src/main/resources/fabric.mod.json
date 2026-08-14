@@ -20,6 +20,12 @@
 				"value": "ru.penik.voice.plus.VoicePlusPV2SVC",
 				"adapter": "kotlin"
 			}
+		],
+		"voicechat": [
+			{
+				"value": "ru.penik.voice.plus.plugins.VoicePlusSvcPlugin",
+				"adapter": "kotlin"
+			}
 		]
 	},
 	"mixins": [

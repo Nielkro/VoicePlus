@@ -3,6 +3,7 @@
 	"package": "ru.penik.voice.plus.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+		"ClientManagerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
