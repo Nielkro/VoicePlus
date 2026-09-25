@@ -31,27 +31,19 @@ class VoicePlusLogger(private val slf4j: Logger) {
     }
 
     fun warn(message: String) {
-        if (VoicePlusConfig.debug == 1) {
-            slf4j.warn(message)
-        }
+        slf4j.warn(message)
     }
 
     fun warn(message: String, t: Throwable) {
-        if (VoicePlusConfig.debug == 1) {
-            slf4j.warn(message, t)
-        }
+        slf4j.warn(message, t)
     }
 
     fun error(message: String) {
-        if (VoicePlusConfig.debug == 1) {
-            slf4j.error(message)
-        }
+        slf4j.error(message)
     }
 
     fun error(message: String, t: Throwable) {
-        if (VoicePlusConfig.debug == 1) {
-            slf4j.error(message, t)
-        }
+        slf4j.error(message, t)
     }
 
     companion object {

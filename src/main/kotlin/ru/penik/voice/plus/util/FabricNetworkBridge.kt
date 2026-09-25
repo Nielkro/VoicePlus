@@ -89,19 +89,23 @@ object FabricNetworkBridge {
             val s2c = s2cMethod?.invoke(null)
             val c2s = c2sMethod?.invoke(null)
 
-            val regMethodS2c = s2c?.javaClass?.methods?.firstOrNull { it.name == "register" && it.parameterCount == 2 }
-            val regMethodC2s = c2s?.javaClass?.methods?.firstOrNull { it.name == "register" && it.parameterCount == 2 }
-
-            regMethodS2c?.invoke(s2c, payloadType, streamCodecProxy)
-            regMethodC2s?.invoke(c2s, payloadType, streamCodecProxy)
-            LOGGER.info("Registered network payload dynamically via ${s2cMethod?.name}/${c2sMethod?.name}")
+            val regMethod = registryClass.methods.firstOrNull { it.name == "register" && it.parameterCount == 2 }
+            if (regMethod != null) {
+                regMethod.isAccessible = true
+                if (s2c != null) regMethod.invoke(s2c, payloadType, streamCodecProxy)
+                if (c2s != null) regMethod.invoke(c2s, payloadType, streamCodecProxy)
+                LOGGER.info("Registered network payload dynamically via ${s2cMethod?.name}/${c2sMethod?.name}")
+            } else {
+                LOGGER.error("Could not find register method on PayloadTypeRegistry")
+            }
 
             // 6. Register receiver in ClientPlayNetworking
             val networkingClass = Class.forName("net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
             val receiverMethod = networkingClass.methods.firstOrNull {
-                it.name == "registerGlobalReceiver" && it.parameterCount == 2
+                it.name in listOf("registerGlobalReceiver", "registerReceiver") && it.parameterCount == 2
             }
             if (receiverMethod != null) {
+                receiverMethod.isAccessible = true
                 val receiverParamType = receiverMethod.parameterTypes[1]
                 val receiverProxy = Proxy.newProxyInstance(
                     receiverParamType.classLoader,
@@ -120,12 +124,14 @@ object FabricNetworkBridge {
                 }
                 receiverMethod.invoke(null, payloadType, receiverProxy)
                 LOGGER.info("Registered ClientPlayNetworking receiver dynamically")
+            } else {
+                LOGGER.error("Could not find register receiver method on ClientPlayNetworking")
             }
 
             // 7. Find send method
             sendMethod = networkingClass.methods.firstOrNull {
                 it.name == "send" && it.parameterCount == 1 && it.parameterTypes[0].isAssignableFrom(payloadClass)
-            }
+            }?.apply { isAccessible = true }
         } catch (e: Throwable) {
             LOGGER.error("Failed to initialize FabricNetworkBridge dynamically", e)
         }
