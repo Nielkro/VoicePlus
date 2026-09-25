@@ -6,14 +6,10 @@ import java.net.InetAddress
 import java.net.SocketException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 import io.netty.buffer.Unpooled
 import net.minecraft.client.Minecraft
 import net.minecraft.network.FriendlyByteBuf
-import net.minecraft.network.RegistryFriendlyByteBuf
-import net.minecraft.network.codec.StreamCodec
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
-import net.minecraft.resources.Identifier
 import ru.penik.voice.plus.core.InboundGateway
 import ru.penik.voice.plus.core.PlayerRegistry
 import ru.penik.voice.plus.core.UniversalVoicePacket
@@ -30,7 +26,7 @@ import ru.penik.voice.plus.crypto.SvcEncryption
  * [PlayerRegistry], but the ACT of injecting it into SVC is protocol-specific.
  */
 class SvcInboundAdapter : InboundGateway {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-SvcInbound")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-SvcInbound")
 
     private var micCb: ((UniversalVoicePacket) -> Unit)? = null
     override fun onMicAudio(cb: (UniversalVoicePacket) -> Unit) { micCb = cb }
@@ -277,29 +273,13 @@ class SvcInboundAdapter : InboundGateway {
     }
 
     // ===================== SVC handshake + state injection =====================
-    // Simple Voice Chat plugin channels (kept for reference; SVC registers the payload
-    // types itself, so we do not register them here).
-    val REQUEST_SECRET_TYPE = CustomPacketPayload.Type<RequestSecretPayload>(Identifier.fromNamespaceAndPath("voicechat", "request_secret"))
-    val SECRET_TYPE = CustomPacketPayload.Type<SecretPayload>(Identifier.fromNamespaceAndPath("voicechat", "secret"))
-
-    val REQUEST_SECRET_STREAM_CODEC = object : StreamCodec<RegistryFriendlyByteBuf, RequestSecretPayload> {
-        override fun encode(buf: RegistryFriendlyByteBuf, value: RequestSecretPayload) { buf.writeBytes(value.bytes) }
-        override fun decode(buf: RegistryFriendlyByteBuf): RequestSecretPayload {
-            val bytes = ByteArray(buf.readableBytes()); buf.readBytes(bytes); return RequestSecretPayload(bytes)
-        }
-    }
-    val SECRET_STREAM_CODEC = object : StreamCodec<RegistryFriendlyByteBuf, SecretPayload> {
-        override fun encode(buf: RegistryFriendlyByteBuf, value: SecretPayload) { buf.writeBytes(value.bytes) }
-        override fun decode(buf: RegistryFriendlyByteBuf): SecretPayload {
-            val bytes = ByteArray(buf.readableBytes()); buf.readBytes(bytes); return SecretPayload(bytes)
-        }
-    }
 
     /**
      * Called once the PV side established a connection: register the SVC secret and
      * hand it to the local SVC client so it can authenticate against this proxy.
      */
     fun provideSecret(playerUuid: UUID, secretBytes: ByteArray) {
+        start()
         registerPlayerSecret(playerUuid, secretBytes)
         sendSecretToLocalClient(playerUuid, secretBytes, localPort)
     }
@@ -362,12 +342,13 @@ class SvcInboundAdapter : InboundGateway {
      */
     fun syncPlayerStates() {
         val connection = Minecraft.getInstance().connection ?: return
-        val localUuid = Minecraft.getInstance().player?.uuid
+        val localUuid = ru.penik.voice.plus.util.ProfileUtils.getLocalPlayerUuid()
         connection.onlinePlayers.forEach { info ->
-            val uuid = info.profile.id
+            val uuid = ru.penik.voice.plus.util.ProfileUtils.getId(info.profile) ?: return@forEach
             if (uuid == localUuid) return@forEach
             val hasPvMod = PlayerRegistry.isKnownPlayer(uuid)
-            injectState(uuid, info.profile.name, disabled = !hasPvMod)
+            val name = ru.penik.voice.plus.util.ProfileUtils.getName(info.profile)
+            injectState(uuid, name, disabled = !hasPvMod)
         }
     }
 
@@ -393,7 +374,7 @@ class SvcInboundAdapter : InboundGateway {
             ).newInstance(uuid, name, disabled, false)
 
             states[uuid] = state
-            LOGGER.info("Injected SVC PlayerState: $name ($uuid); states now = ${states.size}")
+            LOGGER.debug("Injected SVC PlayerState: $name ($uuid); states now = ${states.size}")
 
             // Best-effort UI refresh if the volume screen is open
             try {
@@ -403,12 +384,5 @@ class SvcInboundAdapter : InboundGateway {
         } catch (e: Exception) {
             LOGGER.error("Failed to inject SVC PlayerState for $name", e)
         }
-    }
-
-    inner class RequestSecretPayload(val bytes: ByteArray) : CustomPacketPayload {
-        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = REQUEST_SECRET_TYPE
-    }
-    inner class SecretPayload(val bytes: ByteArray) : CustomPacketPayload {
-        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = SECRET_TYPE
     }
 }

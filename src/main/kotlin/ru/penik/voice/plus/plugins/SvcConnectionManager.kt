@@ -1,12 +1,12 @@
 package ru.penik.voice.plus.plugins
 
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 object SvcConnectionManager {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-SvcConnMgr")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-SvcConnMgr")
     private val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "VoicePlus-ConnectionChecker").apply { isDaemon = true }
     }
@@ -18,11 +18,11 @@ object SvcConnectionManager {
     fun onAuthenticate(secretPacket: Any) {
         lastSecretPacket = secretPacket
 
-        if (!ProxyableVoicechatSocket.useSocks5) {
+        VoicePlusConfig.load()
+        if (!ProxyableVoicechatSocket.useSocks5 && VoicePlusConfig.socksHost.isNotBlank()) {
             // Cancel any existing checker
             checkFuture?.cancel(false)
             
-            VoicePlusConfig.load()
             val timeout = VoicePlusConfig.bypassTimeoutMs
             
             LOGGER.info("Direct connection attempt detected. Scheduling SOCKS5 fallback check in $timeout ms...")
@@ -48,7 +48,7 @@ object SvcConnectionManager {
                     val isInitialized = isInitializedMethod.invoke(connectionInstance) as Boolean
                     val address = getAddressMethod.invoke(connectionInstance) as java.net.InetAddress
                     
-                    if (isInitialized && !address.isLoopbackAddress) {
+                    if (isInitialized) {
                         connectedDirectly = true
                     }
                 }
@@ -56,7 +56,7 @@ object SvcConnectionManager {
             
             if (connectedDirectly) {
                 LOGGER.info("Direct SVC connection succeeded! SOCKS5 bypass not needed.")
-            } else {
+            } else if (VoicePlusConfig.socksHost.isNotBlank()) {
                 LOGGER.warn("Direct SVC connection failed/timed out. Switching to SOCKS5 and retrying...")
                 fallbackToSocks5()
             }

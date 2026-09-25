@@ -7,15 +7,11 @@ import java.net.SocketException
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.util.UUID
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
+import ru.penik.voice.plus.util.FabricNetworkBridge
 import com.google.common.io.ByteStreams
 import io.netty.buffer.Unpooled
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.client.Minecraft
-import net.minecraft.network.RegistryFriendlyByteBuf
-import net.minecraft.network.codec.StreamCodec
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.resources.Identifier
 import ru.penik.voice.plus.core.OutboundGateway
 import ru.penik.voice.plus.core.PlayerRegistry
@@ -33,7 +29,7 @@ import ru.penik.voice.plus.crypto.SvcEncryption
  * control-plane, not part of [UniversalVoicePacket].
  */
 class PvOutboundAdapter : OutboundGateway {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-PvOutbound")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-PvOutbound")
 
     // --- callbacks bridging PV control-plane into the SVC (inbound) side ---
     /** Fired when the PV handshake yields a secret; inbound uses it to auth the local SVC client. */
@@ -54,23 +50,10 @@ class PvOutboundAdapter : OutboundGateway {
     // ============================ TCP client ============================
     private var keyPair: KeyPair? = null
 
-    val PAYLOAD_TYPE = CustomPacketPayload.Type<VoicePlusPayload>(Identifier.fromNamespaceAndPath("plasmo", "voice/v2"))
-
-    val STREAM_CODEC = object : StreamCodec<RegistryFriendlyByteBuf, VoicePlusPayload> {
-        override fun encode(buf: RegistryFriendlyByteBuf, value: VoicePlusPayload) {
-            buf.writeBytes(value.bytes)
-        }
-        override fun decode(buf: RegistryFriendlyByteBuf): VoicePlusPayload {
-            val bytes = ByteArray(buf.readableBytes())
-            buf.readBytes(bytes)
-            return VoicePlusPayload(bytes)
-        }
-    }
-
     override fun initialize() {
-        // Register payload type in Fabric 1.20.5+ / 1.21 Registry
-        PayloadTypeRegistry.playS2C().register(PAYLOAD_TYPE, STREAM_CODEC)
-        PayloadTypeRegistry.playC2S().register(PAYLOAD_TYPE, STREAM_CODEC)
+        FabricNetworkBridge.init(Identifier.fromNamespaceAndPath("plasmo", "voice/v2")) { bytes ->
+            handleServerPacket(bytes)
+        }
 
         // Generate RSA KeyPair for Plasmo Voice authentication
         try {
@@ -81,17 +64,11 @@ class PvOutboundAdapter : OutboundGateway {
         } catch (e: Exception) {
             LOGGER.error("Failed to generate RSA KeyPair", e)
         }
-
-        ClientPlayNetworking.registerGlobalReceiver(PAYLOAD_TYPE) { payload, context ->
-            handleServerPacket(payload.bytes)
-        }
     }
     private var currentSecret: UUID? = null
 
     private fun isLocalPlayer(uuid: UUID): Boolean {
-        val minecraft = Minecraft.getInstance()
-        // Prefer the in-world local player entity; fall back to the session profile id.
-        val localUuid = minecraft.player?.uuid ?: minecraft.user?.profileId
+        val localUuid = ru.penik.voice.plus.util.ProfileUtils.getLocalPlayerUuid()
         return localUuid != null && localUuid == uuid
     }
 
@@ -137,8 +114,7 @@ class PvOutboundAdapter : OutboundGateway {
 
                     // Also feed the secret to virtual SVC server so that the local SVC client can authorize
                     val localSvcSecret = SvcEncryption.uuidToBytes(packet.secret) // Use PV secret as SVC secret
-                    val session = Minecraft.getInstance().user
-                    val playerUuid = session?.profileId
+                    val playerUuid = ru.penik.voice.plus.util.ProfileUtils.getLocalPlayerUuid()
                     if (playerUuid != null) {
                         onConnectionEstablished?.invoke(playerUuid, localSvcSecret)
                     } else {
@@ -219,7 +195,7 @@ class PvOutboundAdapter : OutboundGateway {
 
     fun sendPacket(packet: su.plo.voice.proto.packets.Packet<*>) {
         val encoded = su.plo.voice.proto.packets.tcp.PacketTcpCodec.encode(packet) ?: return
-        ClientPlayNetworking.send(VoicePlusPayload(encoded))
+        FabricNetworkBridge.send(encoded)
         LOGGER.info("Sent Plasmo Voice TCP packet: ${packet::class.java.simpleName}")
     }
 
@@ -384,9 +360,5 @@ class PvOutboundAdapter : OutboundGateway {
 
         val playerUuid = PlayerRegistry.resolvePlayer(sourceId)
         incomingCb?.invoke(UniversalVoicePacket(playerUuid, decryptedAudio, distance, false, sequenceNumber))
-    }
-
-    inner class VoicePlusPayload(val bytes: ByteArray) : CustomPacketPayload {
-        override fun type(): CustomPacketPayload.Type<out CustomPacketPayload> = PAYLOAD_TYPE
     }
 }

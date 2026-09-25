@@ -2,7 +2,7 @@ package ru.penik.voice.plus.core
 
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 
 /**
  * Connects one [InboundGateway] with one [OutboundGateway].
@@ -18,7 +18,7 @@ class VoiceHub(
     private val inbound: InboundGateway,
     private val outbound: OutboundGateway
 ) {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-VoiceHub")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-VoiceHub")
 
     // Outgoing (mic) sequence numbers, per local player.
     private val sendSequenceNumbers = ConcurrentHashMap<UUID, Long>()

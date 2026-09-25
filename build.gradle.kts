@@ -18,17 +18,27 @@ repositories {
 	maven {
 		url = uri("https://repo.plo.su")
 	}
+	maven {
+		url = uri("https://api.modrinth.com/maven")
+	}
 }
+
+val mcVersion = providers.gradleProperty("minecraft_version").get()
+val isUnobfuscated = mcVersion.startsWith("26.")
 
 dependencies {
 	// To change the versions see the gradle.properties file
-	minecraft("com.mojang:minecraft:${providers.gradleProperty("minecraft_version").get()}")
-    mappings(loom.officialMojangMappings())
+	minecraft("com.mojang:minecraft:$mcVersion")
+	if (!isUnobfuscated) {
+		mappings(loom.officialMojangMappings())
+	}
 	modImplementation("net.fabricmc:fabric-loader:${providers.gradleProperty("loader_version").get()}")
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation("net.fabricmc.fabric-api:fabric-api:${providers.gradleProperty("fabric_api_version").get()}")
-    modImplementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
+	modImplementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
+
+	modCompileOnly("maven.modrinth:simple-voice-chat:${providers.gradleProperty("svc_version").get()}")
 
 	implementation("su.plo.voice:protocol:2.1.10")
 	include("su.plo.voice:protocol:2.1.10")
@@ -47,12 +57,12 @@ tasks.processResources {
 }
 
 tasks.withType<JavaCompile>().configureEach {
-	options.release = 21
+	options.release = if (isUnobfuscated) 25 else 21
 }
 
 kotlin {
 	compilerOptions {
-		jvmTarget = JvmTarget.JVM_21
+		jvmTarget = if (isUnobfuscated) JvmTarget.JVM_25 else JvmTarget.JVM_21
 	}
 }
 
@@ -62,8 +72,8 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = if (isUnobfuscated) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
+	targetCompatibility = if (isUnobfuscated) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
 }
 
 tasks.jar {

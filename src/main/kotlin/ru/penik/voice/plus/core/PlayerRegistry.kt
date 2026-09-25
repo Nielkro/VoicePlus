@@ -2,7 +2,7 @@ package ru.penik.voice.plus.core
 
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 
 /**
  * Shared, protocol-agnostic mapping state.
@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
  * only owns the data and the lookups.
  */
 object PlayerRegistry {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-PlayerRegistry")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-PlayerRegistry")
 
     // PV source ID -> sender player UUID, and whether that source is stereo.
     private val sourceToPlayerMap = ConcurrentHashMap<UUID, UUID>()

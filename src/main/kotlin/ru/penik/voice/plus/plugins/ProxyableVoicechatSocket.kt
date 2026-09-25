@@ -2,7 +2,7 @@ package ru.penik.voice.plus.plugins
 
 import de.maxhenkel.voicechat.api.ClientVoicechatSocket
 import de.maxhenkel.voicechat.api.RawUdpPacket
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
@@ -10,7 +10,7 @@ import java.net.*
 import java.nio.ByteBuffer
 
 class ProxyableVoicechatSocket : ClientVoicechatSocket {
-    private val LOGGER = LoggerFactory.getLogger("VoicePlus-ProxySocket")
+    private val LOGGER = VoicePlusLogger.getLogger("VoicePlus-ProxySocket")
 
     private var socket: DatagramSocket? = null
     
@@ -25,7 +25,7 @@ class ProxyableVoicechatSocket : ClientVoicechatSocket {
 
     override fun open() {
         VoicePlusConfig.load()
-        if (useSocks5) {
+        if (useSocks5 && VoicePlusConfig.socksHost.isNotBlank()) {
             LOGGER.info("Opening socket in SOCKS5 mode via ${VoicePlusConfig.socksHost}:${VoicePlusConfig.socksPort}...")
             try {
                 // 1. Establish SOCKS5 TCP connection
@@ -201,7 +201,7 @@ class ProxyableVoicechatSocket : ClientVoicechatSocket {
             val payload = buf.array()
             s.send(DatagramPacket(payload, payload.size, relay))
         } else {
-            s.send(DatagramPacket(data, data.length, address))
+            s.send(DatagramPacket(data, data.size, address))
         }
     }
 

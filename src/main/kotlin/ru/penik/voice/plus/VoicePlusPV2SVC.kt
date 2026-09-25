@@ -2,7 +2,7 @@ package ru.penik.voice.plus
 
 import net.fabricmc.api.ClientModInitializer
 import net.minecraft.resources.Identifier
-import org.slf4j.LoggerFactory
+import ru.penik.voice.plus.util.VoicePlusLogger
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import ru.penik.voice.plus.adapters.inbound.SvcInboundAdapter
 import ru.penik.voice.plus.adapters.outbound.PvOutboundAdapter
@@ -11,7 +11,7 @@ import ru.penik.voice.plus.core.VoiceHub
 object VoicePlusPV2SVC : ClientModInitializer {
 	const val MOD_ID: String = "voice-plus-pv2svc"
 
-	private val LOGGER = LoggerFactory.getLogger(MOD_ID)
+	private val LOGGER = VoicePlusLogger.getLogger(MOD_ID)
 
 	// SVC->PV bridge composition: SVC inbound adapter <-> VoiceHub <-> PV outbound adapter.
 	private val inbound = SvcInboundAdapter()
@@ -24,6 +24,7 @@ object VoicePlusPV2SVC : ClientModInitializer {
 		// Bridge PV control-plane into the SVC side:
 		outbound.onConnectionEstablished = { playerUuid, secretBytes ->
 			inbound.provideSecret(playerUuid, secretBytes)
+			inbound.syncPlayerStates()
 		}
 		outbound.onPlayerDiscovered = { uuid, nick ->
 			inbound.registerAndInjectPlayer(uuid, nick)
@@ -35,9 +36,7 @@ object VoicePlusPV2SVC : ClientModInitializer {
 
 		// Control the local proxy server lifecycle on Join/Disconnect
 		ClientPlayConnectionEvents.JOIN.register { handler, sender, client ->
-			LOGGER.info("Joined server, starting Local SVC UDP proxy virtual server...")
-			inbound.start()
-			inbound.syncPlayerStates()
+			// Local proxy server is now started lazily when PV connection is established
 		}
 
 		ClientPlayConnectionEvents.DISCONNECT.register { handler, client ->
