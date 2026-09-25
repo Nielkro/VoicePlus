@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import net.fabricmc.loom.api.LoomGradleExtensionAPI
 
 plugins {
 	id("net.fabricmc.fabric-loom") apply false
@@ -18,6 +19,8 @@ if (isUnobfuscated) {
 	apply(plugin = "net.fabricmc.fabric-loom-remap")
 }
 
+val loom = project.extensions.getByName("loom") as LoomGradleExtensionAPI
+
 repositories {
 	maven {
 		url = uri("https://repo.plasmoverse.com/releases")
@@ -32,23 +35,23 @@ repositories {
 
 dependencies {
 	// To change the versions see the gradle.properties file
-	minecraft("com.mojang:minecraft:$mcVersion")
+	"minecraft"("com.mojang:minecraft:$mcVersion")
 	if (!isUnobfuscated) {
-		mappings(loom.officialMojangMappings())
+		"mappings"(loom.officialMojangMappings())
 	}
-	modImplementation("net.fabricmc:fabric-loader:${prop("loader_version")}")
+	"modImplementation"("net.fabricmc:fabric-loader:${prop("loader_version")}")
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation("net.fabricmc.fabric-api:fabric-api:${prop("fabric_api_version")}")
-	modImplementation("net.fabricmc:fabric-language-kotlin:${prop("fabric_kotlin_version")}")
+	"modImplementation"("net.fabricmc.fabric-api:fabric-api:${prop("fabric_api_version")}")
+	"modImplementation"("net.fabricmc:fabric-language-kotlin:${prop("fabric_kotlin_version")}")
 
-	modCompileOnly("maven.modrinth:simple-voice-chat:${prop("svc_version")}")
+	"modCompileOnly"("maven.modrinth:simple-voice-chat:${prop("svc_version")}")
 
 	implementation("su.plo.voice:protocol:2.1.10")
-	include("su.plo.voice:protocol:2.1.10")
+	"include"("su.plo.voice:protocol:2.1.10")
 
 	implementation("su.plo.slib:api-common:1.5.4")
-	include("su.plo.slib:api-common:1.5.4")
+	"include"("su.plo.slib:api-common:1.5.4")
 }
 
 tasks.processResources {
