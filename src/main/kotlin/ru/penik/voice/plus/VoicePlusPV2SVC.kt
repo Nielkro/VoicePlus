@@ -21,7 +21,10 @@ object VoicePlusPV2SVC : ClientModInitializer {
 		LOGGER.info("Initializing Voice Plus (PV to SVC Client Bridge)...")
 
 		try {
-			val mcVer = net.minecraft.client.Minecraft.getInstance()?.launchedVersion ?: "unknown"
+			val mcVer = net.fabricmc.loader.api.FabricLoader.getInstance()
+				.getModContainer("minecraft")
+				.map { it.metadata.version.friendlyString }
+				.orElse("unknown")
 			ru.penik.voice.plus.util.MetricsReporter.reportLaunch(mcVer)
 		} catch (_: Throwable) {}
 

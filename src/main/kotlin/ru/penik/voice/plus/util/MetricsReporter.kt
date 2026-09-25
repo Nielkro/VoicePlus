@@ -22,7 +22,7 @@ object MetricsReporter {
         when {
             os.contains("win") -> "windows"
             os.contains("mac") -> "macos"
-            os.contains("nix") || os.contains("nux") || os.contains("aix") -> "linux"
+            os.contains("linux") || os.contains("nix") || os.contains("nux") || os.contains("aix") -> "linux"
             else -> "other"
         }
     }
@@ -84,6 +84,8 @@ object MetricsReporter {
                 "event": "session_ended",
                 "mod_version": "$MOD_VERSION",
                 "mc_version": "$mcVersion",
+                "java_version": "$javaMajorVersion",
+                "os": "$osType",
                 "duration_bucket": "$bucket",
                 "duration_seconds": $durationSec,
                 "uses_socks": ${VoicePlusConfig.socksHost.isNotBlank()}
