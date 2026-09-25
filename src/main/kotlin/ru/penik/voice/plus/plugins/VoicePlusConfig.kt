@@ -11,7 +11,7 @@ object VoicePlusConfig {
     var bypassTimeoutMs: Long = 5000
     var debug: Int = 0
     var enableMetrics: Boolean = true
-    var metricsUrl: String = "https://stats.voiceplus.su/api/v1/metrics"
+    var metricsUrl: String = "https://stats.other.penik.ru/api/v1/metrics"
 
     init {
         load()
@@ -34,7 +34,7 @@ object VoicePlusConfig {
                 bypassTimeoutMs = props.getProperty("bypassTimeoutMs", "5000").toLongOrNull() ?: 5000
                 debug = props.getProperty("debug", "0").toIntOrNull() ?: if (props.getProperty("debug", "false").toBoolean()) 1 else 0
                 enableMetrics = props.getProperty("enableMetrics", "true").toBoolean()
-                metricsUrl = props.getProperty("metricsUrl", "https://stats.voiceplus.su/api/v1/metrics")
+                metricsUrl = props.getProperty("metricsUrl", "https://stats.other.penik.ru/api/v1/metrics")
             } catch (e: Exception) {
                 e.printStackTrace()
             }
