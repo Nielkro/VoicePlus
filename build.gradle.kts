@@ -12,6 +12,7 @@ fun prop(name: String): String = project.findProperty(name)?.toString() ?: error
 
 val mcVersion = prop("minecraft_version")
 val isUnobfuscated = mcVersion.startsWith("26.")
+version = "${prop("version")}-$mcVersion"
 
 if (isUnobfuscated) {
 	apply(plugin = "net.fabricmc.fabric-loom")
@@ -100,7 +101,7 @@ java {
 }
 
 base {
-	archivesName.set("voice-plus-pv2svc-${project.name}")
+	archivesName.set("voice-plus-pv2svc")
 }
 
 tasks.jar {

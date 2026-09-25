@@ -27,9 +27,15 @@ object MetricsReporter {
         }
     }
 
-    private val javaMajorVersion: String by lazy {
-        val version = System.getProperty("java.version", "unknown")
-        version.split(".").firstOrNull() ?: version
+    private fun getFullModVersion(mcVersion: String): String {
+        return try {
+            net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer("voice-plus-pv2svc")
+                .map { it.metadata.version.friendlyString }
+                .orElse("1.1.0-$mcVersion")
+        } catch (_: Throwable) {
+            "1.1.0-$mcVersion"
+        }
     }
 
     fun reportLaunch(mcVersion: String) {
@@ -38,12 +44,13 @@ object MetricsReporter {
         val url = VoicePlusConfig.metricsUrl
         if (url.isBlank() || url.contains("example.com")) return
 
+        val fullVer = getFullModVersion(mcVersion)
         sendAsync(
             url,
             """
             {
                 "event": "launch",
-                "mod_version": "$MOD_VERSION",
+                "mod_version": "$fullVer",
                 "mc_version": "$mcVersion",
                 "java_version": "$javaMajorVersion",
                 "os": "$osType",
@@ -77,12 +84,13 @@ object MetricsReporter {
         val url = VoicePlusConfig.metricsUrl
         if (url.isBlank() || url.contains("example.com")) return
 
+        val fullVer = getFullModVersion(mcVersion)
         sendAsync(
             url,
             """
             {
                 "event": "session_ended",
-                "mod_version": "$MOD_VERSION",
+                "mod_version": "$fullVer",
                 "mc_version": "$mcVersion",
                 "java_version": "$javaMajorVersion",
                 "os": "$osType",
