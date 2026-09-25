@@ -226,12 +226,13 @@ async fn get_stats_handler(
         }
     }
 
-    let mut mod_versions = HashMap::new();
+    let mut mod_versions: HashMap<String, i64> = HashMap::new();
     if let Ok(mut stmt) = conn.prepare("SELECT mod_version, COUNT(*) FROM events WHERE event_type = 'launch' GROUP BY mod_version") {
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
         if let Ok(rows) = rows {
             for row in rows.flatten() {
-                mod_versions.insert(row.0, row.1);
+                let base_ver = row.0.split('-').next().unwrap_or(&row.0).to_string();
+                *mod_versions.entry(base_ver).or_insert(0) += row.1;
             }
         }
     }
