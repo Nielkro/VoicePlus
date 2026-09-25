@@ -358,14 +358,14 @@ async fn dashboard_handler() -> Html<&'static str> {
                 <p class="text-slate-400 text-sm mt-1">100% Anonymous Stateless Mod Telemetry Dashboard</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
+                <span id="refresh-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
                     <span class="w-2 h-2 mr-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                    Protected & Private
+                    <span id="timer-text">Auto-refresh in 30s</span>
                 </span>
                 <button onclick="logoutToken()" title="Change access token" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs text-slate-300 transition">
                     🔑 Key
                 </button>
-                <button onclick="loadStats()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm text-slate-200 transition">
+                <button onclick="manualRefresh()" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm text-white font-medium transition shadow-lg shadow-sky-600/20">
                     Refresh
                 </button>
             </div>
@@ -388,10 +388,10 @@ async fn dashboard_handler() -> Html<&'static str> {
                 <div class="text-4xl font-bold text-amber-400 mt-2" id="val-socks-rate">-%</div>
                 <div class="text-xs text-slate-400 mt-2" id="val-socks-counts">- direct / - proxy</div>
             </div>
-            <div class="bg-cardBg border border-slate-700/60 rounded-xl p-6 shadow-xl relative overflow-hidden">
+            <div id="card-top-mc" class="bg-cardBg border border-slate-700/60 rounded-xl p-6 shadow-xl relative overflow-hidden transition-all duration-500">
                 <div class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Top MC Version</div>
-                <div class="text-4xl font-bold text-purple-400 mt-2" id="val-top-mc">-</div>
-                <div class="text-xs text-slate-400 mt-2">Most active version</div>
+                <div class="text-4xl font-bold mt-2 text-slate-100" id="val-top-mc">-</div>
+                <div class="text-xs text-slate-400 mt-2" id="val-top-mc-pct">Most active version</div>
             </div>
         </div>
 
@@ -443,7 +443,7 @@ async fn dashboard_handler() -> Html<&'static str> {
                 <div class="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 space-y-1">
                     <div>• <strong>Zero Persistent ID:</strong> Every event is standalone.</div>
                     <div>• <strong>Bucketized Durations:</strong> Raw seconds are grouped to avoid fingerprinting.</div>
-                    <div>• <strong>Token-Protected:</strong> Analytics are private to the server administrator.</div>
+                    <div>• <strong>Deterministic Colors:</strong> Stable analytics view across auto-refreshes.</div>
                 </div>
             </div>
         </div>
@@ -451,7 +451,47 @@ async fn dashboard_handler() -> Html<&'static str> {
 
     <script>
         let charts = {};
-        const palette = ['#38bdf8', '#34d399', '#a78bfa', '#fb923c', '#f472b6', '#facc15', '#94a3b8'];
+        let countdown = 30;
+
+        const fixedColors = {
+            '26.3': '#38bdf8',
+            '26.2': '#34d399',
+            '26.1': '#a78bfa',
+            '1.21.11': '#fb923c',
+            '1.21.4': '#f472b6',
+            '1.21.3': '#facc15',
+            '1.21.2': '#94a3b8',
+            'linux': '#34d399',
+            'windows': '#38bdf8',
+            'macos': '#a78bfa',
+            'other': '#64748b'
+        };
+
+        const fallbackPalette = [
+            '#38bdf8', '#34d399', '#a78bfa', '#fb923c', '#f472b6', 
+            '#facc15', '#2dd4bf', '#818cf8', '#f87171', '#94a3b8'
+        ];
+
+        function getDeterministicColor(label) {
+            const key = String(label).toLowerCase().trim();
+            if (fixedColors[key]) return fixedColors[key];
+            
+            // Stable hash
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = (hash << 5) - hash + key.charCodeAt(i);
+                hash |= 0;
+            }
+            const index = Math.abs(hash) % fallbackPalette.length;
+            return fallbackPalette[index];
+        }
+
+        function sortMapEntries(dataMap) {
+            return Object.entries(dataMap).sort((a, b) => {
+                if (b[1] !== a[1]) return b[1] - a[1];
+                return String(a[0]).localeCompare(String(b[0]));
+            });
+        }
 
         function getToken() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -471,6 +511,11 @@ async fn dashboard_handler() -> Html<&'static str> {
             localStorage.removeItem('vp_auth_token');
             document.getElementById('token-input').value = '';
             document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
+        function manualRefresh() {
+            countdown = 30;
+            loadStats();
         }
 
         async function loadStats() {
@@ -498,29 +543,57 @@ async fn dashboard_handler() -> Html<&'static str> {
                 document.getElementById('val-socks-rate').innerText = socksPct + '%';
                 document.getElementById('val-socks-counts').innerText = `${data.direct_count} direct / ${data.socks_count} socks`;
 
-                const sortedMc = Object.entries(data.mc_versions).sort((a, b) => b[1] - a[1]);
-                document.getElementById('val-top-mc').innerText = sortedMc.length > 0 ? sortedMc[0][0] : 'N/A';
+                const sortedMc = sortMapEntries(data.mc_versions);
+                const topMcEl = document.getElementById('val-top-mc');
+                const topMcCard = document.getElementById('card-top-mc');
 
-                renderDoughnut('chart-mc', data.mc_versions);
-                renderBar('chart-mod', data.mod_versions, '#a78bfa');
-                renderDoughnut('chart-os', data.os_breakdown);
-                renderDurationBar('chart-duration', data.duration_buckets);
-                renderTrend('chart-trend', data.daily_trend);
+                if (sortedMc.length > 0) {
+                    const topName = sortedMc[0][0];
+                    const topCount = sortedMc[0][1];
+                    const topPct = data.total_launches > 0 ? Math.round((topCount / data.total_launches) * 100) : 0;
+                    const topColor = getDeterministicColor(topName);
+
+                    topMcEl.innerText = topName;
+                    topMcEl.style.color = topColor;
+                    topMcCard.style.borderColor = topColor + '66';
+                    document.getElementById('val-top-mc-pct').innerText = `${topCount} launches (${topPct}%)`;
+                } else {
+                    topMcEl.innerText = 'N/A';
+                    topMcEl.style.color = '#94a3b8';
+                }
+
+                updateDoughnut('chart-mc', data.mc_versions);
+                updateBar('chart-mod', data.mod_versions);
+                updateDoughnut('chart-os', data.os_breakdown);
+                updateDurationBar('chart-duration', data.duration_buckets);
+                updateTrend('chart-trend', data.daily_trend);
             } catch (err) {
                 console.error('Failed to load stats:', err);
             }
         }
 
-        function renderDoughnut(id, dataMap) {
+        function updateDoughnut(id, dataMap) {
+            const sorted = sortMapEntries(dataMap);
+            const labels = sorted.map(e => e[0]);
+            const values = sorted.map(e => e[1]);
+            const colors = labels.map(l => getDeterministicColor(l));
+
+            if (charts[id]) {
+                charts[id].data.labels = labels;
+                charts[id].data.datasets[0].data = values;
+                charts[id].data.datasets[0].backgroundColor = colors;
+                charts[id].update();
+                return;
+            }
+
             const ctx = document.getElementById(id).getContext('2d');
-            if (charts[id]) charts[id].destroy();
             charts[id] = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: Object.keys(dataMap),
+                    labels: labels,
                     datasets: [{
-                        data: Object.values(dataMap),
-                        backgroundColor: palette,
+                        data: values,
+                        backgroundColor: colors,
                         borderColor: '#1e293b',
                         borderWidth: 2
                     }]
@@ -528,28 +601,42 @@ async fn dashboard_handler() -> Html<&'static str> {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 400 },
                     plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } }
                 }
             });
         }
 
-        function renderBar(id, dataMap, color) {
+        function updateBar(id, dataMap) {
+            const sorted = sortMapEntries(dataMap);
+            const labels = sorted.map(e => e[0]);
+            const values = sorted.map(e => e[1]);
+            const colors = labels.map(l => getDeterministicColor(l));
+
+            if (charts[id]) {
+                charts[id].data.labels = labels;
+                charts[id].data.datasets[0].data = values;
+                charts[id].data.datasets[0].backgroundColor = colors;
+                charts[id].update();
+                return;
+            }
+
             const ctx = document.getElementById(id).getContext('2d');
-            if (charts[id]) charts[id].destroy();
             charts[id] = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(dataMap),
+                    labels: labels,
                     datasets: [{
                         label: 'Count',
-                        data: Object.values(dataMap),
-                        backgroundColor: color,
+                        data: values,
+                        backgroundColor: colors,
                         borderRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 400 },
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
@@ -559,13 +646,19 @@ async fn dashboard_handler() -> Html<&'static str> {
             });
         }
 
-        function renderDurationBar(id, dataMap) {
+        function updateDurationBar(id, dataMap) {
             const bucketOrder = ['under_5m', '5m_15m', '15m_1h', '1h_3h', 'over_3h'];
             const labels = ['< 5m', '5-15m', '15m-1h', '1-3h', '> 3h'];
             const counts = bucketOrder.map(b => dataMap[b] || 0);
+            const colors = ['#38bdf8', '#34d399', '#facc15', '#fb923c', '#a78bfa'];
+
+            if (charts[id]) {
+                charts[id].data.datasets[0].data = counts;
+                charts[id].update();
+                return;
+            }
 
             const ctx = document.getElementById(id).getContext('2d');
-            if (charts[id]) charts[id].destroy();
             charts[id] = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -573,13 +666,14 @@ async fn dashboard_handler() -> Html<&'static str> {
                     datasets: [{
                         label: 'Sessions',
                         data: counts,
-                        backgroundColor: '#34d399',
+                        backgroundColor: colors,
                         borderRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 400 },
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
@@ -589,17 +683,28 @@ async fn dashboard_handler() -> Html<&'static str> {
             });
         }
 
-        function renderTrend(id, trendList) {
+        function updateTrend(id, trendList) {
+            const labels = trendList.map(t => t.date);
+            const launches = trendList.map(t => t.launches);
+            const sessions = trendList.map(t => t.sessions);
+
+            if (charts[id]) {
+                charts[id].data.labels = labels;
+                charts[id].data.datasets[0].data = launches;
+                charts[id].data.datasets[1].data = sessions;
+                charts[id].update();
+                return;
+            }
+
             const ctx = document.getElementById(id).getContext('2d');
-            if (charts[id]) charts[id].destroy();
             charts[id] = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: trendList.map(t => t.date),
+                    labels: labels,
                     datasets: [
                         {
                             label: 'Launches',
-                            data: trendList.map(t => t.launches),
+                            data: launches,
                             borderColor: '#38bdf8',
                             backgroundColor: 'rgba(56, 189, 248, 0.1)',
                             fill: true,
@@ -607,7 +712,7 @@ async fn dashboard_handler() -> Html<&'static str> {
                         },
                         {
                             label: 'Voice Sessions',
-                            data: trendList.map(t => t.sessions),
+                            data: sessions,
                             borderColor: '#34d399',
                             backgroundColor: 'rgba(52, 211, 153, 0.1)',
                             fill: true,
@@ -618,6 +723,7 @@ async fn dashboard_handler() -> Html<&'static str> {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 400 },
                     plugins: { legend: { position: 'top', labels: { color: '#cbd5e1' } } },
                     scales: {
                         x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
@@ -627,8 +733,21 @@ async fn dashboard_handler() -> Html<&'static str> {
             });
         }
 
+        // Init
         loadStats();
-        setInterval(loadStats, 30000);
+
+        // Smooth countdown timer and auto-refresh every 30s
+        setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                countdown = 30;
+                loadStats();
+            }
+            const timerEl = document.getElementById('timer-text');
+            if (timerEl) {
+                timerEl.innerText = `Auto-refresh in ${countdown}s`;
+            }
+        }, 1000);
     </script>
 </body>
 </html>"#)
