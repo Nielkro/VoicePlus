@@ -12,7 +12,6 @@ import ru.penik.voice.plus.util.FabricNetworkBridge
 import com.google.common.io.ByteStreams
 import io.netty.buffer.Unpooled
 import net.minecraft.client.Minecraft
-import net.minecraft.resources.Identifier
 import ru.penik.voice.plus.core.OutboundGateway
 import ru.penik.voice.plus.core.PlayerRegistry
 import ru.penik.voice.plus.core.UniversalVoicePacket
@@ -51,7 +50,7 @@ class PvOutboundAdapter : OutboundGateway {
     private var keyPair: KeyPair? = null
 
     override fun initialize() {
-        FabricNetworkBridge.init(Identifier.fromNamespaceAndPath("plasmo", "voice/v2")) { bytes ->
+        FabricNetworkBridge.init("plasmo", "voice/v2") { bytes ->
             handleServerPacket(bytes)
         }
 

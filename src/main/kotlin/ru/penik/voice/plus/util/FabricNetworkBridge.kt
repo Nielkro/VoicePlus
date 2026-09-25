@@ -1,6 +1,5 @@
 package ru.penik.voice.plus.util
 
-import net.minecraft.resources.Identifier
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -16,8 +15,10 @@ object FabricNetworkBridge {
         fun getRawBytes(): ByteArray
     }
 
-    fun init(channelId: Identifier, onPacketReceived: (ByteArray) -> Unit) {
+    fun init(namespace: String, path: String, onPacketReceived: (ByteArray) -> Unit) {
         try {
+            val channelId = createIdentifier(namespace, path)
+
             // 1. Locate CustomPacketPayload interface
             val payloadClass = findClass(
                 "net.minecraft.network.protocol.common.custom.CustomPacketPayload",
@@ -160,6 +161,40 @@ object FabricNetworkBridge {
                 }
             }
         )
+    }
+
+    private fun createIdentifier(namespace: String, path: String): Any {
+        val idClass = findClass(
+            "net.minecraft.resources.ResourceLocation",
+            "net.minecraft.resources.Identifier",
+            "net.minecraft.util.Identifier",
+            "net.minecraft.class_2960"
+        ) ?: throw ClassNotFoundException("Could not find Identifier/ResourceLocation class")
+
+        val fromNsMethod = idClass.methods.firstOrNull {
+            it.name in listOf("fromNamespaceAndPath", "of", "tryBuild", "tryCreate") && it.parameterCount == 2
+        }
+        if (fromNsMethod != null) {
+            return fromNsMethod.invoke(null, namespace, path)
+        }
+
+        val ctor2 = idClass.declaredConstructors.firstOrNull {
+            it.parameterCount == 2 && it.parameterTypes[0] == String::class.java && it.parameterTypes[1] == String::class.java
+        }
+        if (ctor2 != null) {
+            ctor2.isAccessible = true
+            return ctor2.newInstance(namespace, path)
+        }
+
+        val ctor1 = idClass.declaredConstructors.firstOrNull {
+            it.parameterCount == 1 && it.parameterTypes[0] == String::class.java
+        }
+        if (ctor1 != null) {
+            ctor1.isAccessible = true
+            return ctor1.newInstance("$namespace:$path")
+        }
+
+        error("Could not construct Identifier for $namespace:$path")
     }
 
     private fun findClass(vararg names: String): Class<*>? {

@@ -1,7 +1,6 @@
 package ru.penik.voice.plus
 
 import net.fabricmc.api.ClientModInitializer
-import net.minecraft.resources.Identifier
 import ru.penik.voice.plus.util.VoicePlusLogger
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import ru.penik.voice.plus.adapters.inbound.SvcInboundAdapter
@@ -46,7 +45,4 @@ object VoicePlusPV2SVC : ClientModInitializer {
 			ru.penik.voice.plus.plugins.SvcConnectionManager.reset()
 		}
 	}
-
-	fun id(path: String): Identifier
-		= Identifier.fromNamespaceAndPath(MOD_ID, path)
 }
