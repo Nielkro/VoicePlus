@@ -105,8 +105,13 @@ object FabricNetworkBridge {
                 if (m != null) {
                     val reg = m.invoke(null)
                     if (reg != null) {
-                        regMethod.invoke(reg, payloadType, streamCodecProxy)
-                        LOGGER.info("Registered network payload on PayloadTypeRegistry.$mName")
+                        try {
+                            regMethod.invoke(reg, payloadType, streamCodecProxy)
+                            println("[VoicePlus] Registered network payload on PayloadTypeRegistry.$mName")
+                        } catch (e: Throwable) {
+                            println("[VoicePlus] Failed to register on PayloadTypeRegistry.$mName: ${e.message}")
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
@@ -117,8 +122,13 @@ object FabricNetworkBridge {
                 if (m != null) {
                     val reg = m.invoke(null)
                     if (reg != null) {
-                        regMethod.invoke(reg, payloadType, streamCodecProxy)
-                        LOGGER.info("Registered network payload on PayloadTypeRegistry.$mName")
+                        try {
+                            regMethod.invoke(reg, payloadType, streamCodecProxy)
+                            println("[VoicePlus] Registered network payload on PayloadTypeRegistry.$mName")
+                        } catch (e: Throwable) {
+                            println("[VoicePlus] Failed to register on PayloadTypeRegistry.$mName: ${e.message}")
+                            e.printStackTrace()
+                        }
                     }
                 }
             }
@@ -149,9 +159,9 @@ object FabricNetworkBridge {
                     null
                 }
                 receiverMethod.invoke(null, payloadType, receiverProxy)
-                LOGGER.info("Registered ClientPlayNetworking receiver dynamically using ${receiverMethod.name}")
+                println("[VoicePlus] Registered ClientPlayNetworking receiver dynamically using ${receiverMethod.name}")
             } else {
-                LOGGER.error("Could not find register receiver method on ClientPlayNetworking")
+                println("[VoicePlus] ERROR: Could not find register receiver method on ClientPlayNetworking")
             }
 
             // 7. Find send method
@@ -160,7 +170,10 @@ object FabricNetworkBridge {
             } ?: networkingClass.methods.firstOrNull {
                 it.name == "send" && it.parameterCount == 1
             }?.apply { isAccessible = true }
+            println("[VoicePlus] Found sendMethod: $sendMethod")
         } catch (e: Throwable) {
+            println("[VoicePlus] FATAL error initializing FabricNetworkBridge:")
+            e.printStackTrace()
             LOGGER.error("Failed to initialize FabricNetworkBridge dynamically", e)
         }
     }
