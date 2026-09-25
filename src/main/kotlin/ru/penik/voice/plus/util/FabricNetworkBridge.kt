@@ -5,20 +5,20 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
-//? if <=1.21.4 {
+//? if <26.1 {
 import net.minecraft.resources.ResourceLocation
 //?} else {
-/*import net.minecraft.resources.Identifier*///?
+/*import net.minecraft.resources.Identifier*/
 //?}
 
 class PlasmoVoicePayload(val data: ByteArray) : CustomPacketPayload {
     override fun type(): CustomPacketPayload.Type<PlasmoVoicePayload> = TYPE
 
     companion object {
-        //? if <=1.21.4 {
+        //? if <26.1 {
         val ID: ResourceLocation = ResourceLocation.fromNamespaceAndPath("plasmo", "voice/v2")
         //?} else {
-        /*val ID: Identifier = Identifier.fromNamespaceAndPath("plasmo", "voice/v2")*///?
+        /*val ID: Identifier = Identifier.fromNamespaceAndPath("plasmo", "voice/v2")*/
         //?}
 
         val TYPE: CustomPacketPayload.Type<PlasmoVoicePayload> = CustomPacketPayload.Type(ID)
@@ -42,10 +42,17 @@ object FabricNetworkBridge {
 
     fun init(onPacketReceived: (ByteArray) -> Unit) {
         try {
+            //? if <26.1 {
             PayloadTypeRegistry.playS2C().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
             PayloadTypeRegistry.playC2S().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
             PayloadTypeRegistry.configurationS2C().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
             PayloadTypeRegistry.configurationC2S().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
+            //?} else {
+            /*PayloadTypeRegistry.clientboundPlay().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
+            PayloadTypeRegistry.serverboundPlay().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
+            PayloadTypeRegistry.clientboundConfiguration().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)
+            PayloadTypeRegistry.serverboundConfiguration().register(PlasmoVoicePayload.TYPE, PlasmoVoicePayload.CODEC)*/
+            //?}
 
             ClientPlayNetworking.registerGlobalReceiver(PlasmoVoicePayload.TYPE) { payload, _ ->
                 onPacketReceived(payload.data)
