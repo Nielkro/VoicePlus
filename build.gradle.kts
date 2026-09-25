@@ -33,19 +33,35 @@ repositories {
 	}
 }
 
+fun DependencyHandlerScope.modImpl(dep: Any) {
+	if (isUnobfuscated) {
+		implementation(dep)
+	} else {
+		"modImplementation"(dep)
+	}
+}
+
+fun DependencyHandlerScope.modCompOnly(dep: Any) {
+	if (isUnobfuscated) {
+		compileOnly(dep)
+	} else {
+		"modCompileOnly"(dep)
+	}
+}
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	"minecraft"("com.mojang:minecraft:$mcVersion")
 	if (!isUnobfuscated) {
 		"mappings"(loom.officialMojangMappings())
 	}
-	"modImplementation"("net.fabricmc:fabric-loader:${prop("loader_version")}")
+	modImpl("net.fabricmc:fabric-loader:${prop("loader_version")}")
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	"modImplementation"("net.fabricmc.fabric-api:fabric-api:${prop("fabric_api_version")}")
-	"modImplementation"("net.fabricmc:fabric-language-kotlin:${prop("fabric_kotlin_version")}")
+	modImpl("net.fabricmc.fabric-api:fabric-api:${prop("fabric_api_version")}")
+	modImpl("net.fabricmc:fabric-language-kotlin:${prop("fabric_kotlin_version")}")
 
-	"modCompileOnly"("maven.modrinth:simple-voice-chat:${prop("svc_version")}")
+	modCompOnly("maven.modrinth:simple-voice-chat:${prop("svc_version")}")
 
 	implementation("su.plo.voice:protocol:2.1.10")
 	"include"("su.plo.voice:protocol:2.1.10")
