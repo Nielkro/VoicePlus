@@ -51,3 +51,8 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# rust server
+server/target/
+server/telemetry.db
+*.swp
