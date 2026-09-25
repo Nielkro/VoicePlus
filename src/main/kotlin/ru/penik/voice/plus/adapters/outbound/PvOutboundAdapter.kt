@@ -50,7 +50,7 @@ class PvOutboundAdapter : OutboundGateway {
     private var keyPair: KeyPair? = null
 
     override fun initialize() {
-        FabricNetworkBridge.init("plasmo", "voice/v2") { bytes ->
+        FabricNetworkBridge.init { bytes ->
             handleServerPacket(bytes)
         }
 
