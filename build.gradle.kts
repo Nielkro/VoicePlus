@@ -1,17 +1,24 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-	id("net.fabricmc.fabric-loom-remap")
+	id("net.fabricmc.fabric-loom") apply false
+	id("net.fabricmc.fabric-loom-remap") apply false
 	`maven-publish`
 	id("org.jetbrains.kotlin.jvm") version "2.4.10"
 }
 
+fun prop(name: String): String = project.findProperty(name)?.toString() ?: error("Missing property $name")
+
+val mcVersion = prop("minecraft_version")
+val isUnobfuscated = mcVersion.startsWith("26.")
+
+if (isUnobfuscated) {
+	apply(plugin = "net.fabricmc.fabric-loom")
+} else {
+	apply(plugin = "net.fabricmc.fabric-loom-remap")
+}
+
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
 	maven {
 		url = uri("https://repo.plasmoverse.com/releases")
 	}
@@ -22,11 +29,6 @@ repositories {
 		url = uri("https://api.modrinth.com/maven")
 	}
 }
-
-fun prop(name: String): String = project.findProperty(name)?.toString() ?: error("Missing property $name")
-
-val mcVersion = prop("minecraft_version")
-val isUnobfuscated = mcVersion.startsWith("26.")
 
 dependencies {
 	// To change the versions see the gradle.properties file

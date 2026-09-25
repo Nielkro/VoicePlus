@@ -14,6 +14,7 @@ pluginManagement {
 
 	plugins {
 		id("dev.kikugie.stonecutter") version "0.6.1"
+		id("net.fabricmc.fabric-loom") version providers.gradleProperty("loom_version")
 		id("net.fabricmc.fabric-loom-remap") version providers.gradleProperty("loom_version")
 	}
 }
