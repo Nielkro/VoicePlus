@@ -1,0 +1,15 @@
+# Caddyfile configuration for VoicePlus Telemetry
+# Replace stats.example.com with your actual domain or subdomain
+
+stats.example.com {
+    # Forward all traffic to the Rust telemetry backend on port 8080
+    reverse_proxy 127.0.0.1:8080
+
+    # Privacy guarantee: Do not log client IP addresses or access details
+    log {
+        output discard
+    }
+
+    # Enable automatic HTTPS compression
+    encode gzip zstd
+}

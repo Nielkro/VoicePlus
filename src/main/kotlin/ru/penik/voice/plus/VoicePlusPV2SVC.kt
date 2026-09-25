@@ -20,10 +20,16 @@ object VoicePlusPV2SVC : ClientModInitializer {
 	override fun onInitializeClient() {
 		LOGGER.info("Initializing Voice Plus (PV to SVC Client Bridge)...")
 
+		try {
+			val mcVer = net.minecraft.client.Minecraft.getInstance()?.launchedVersion ?: "unknown"
+			ru.penik.voice.plus.util.MetricsReporter.reportLaunch(mcVer)
+		} catch (_: Throwable) {}
+
 		// Bridge PV control-plane into the SVC side:
 		outbound.onConnectionEstablished = { playerUuid, secretBytes ->
 			inbound.provideSecret(playerUuid, secretBytes)
 			inbound.syncPlayerStates()
+			ru.penik.voice.plus.util.MetricsReporter.startSession()
 		}
 		outbound.onPlayerDiscovered = { uuid, nick ->
 			inbound.registerAndInjectPlayer(uuid, nick)
@@ -43,6 +49,8 @@ object VoicePlusPV2SVC : ClientModInitializer {
 			inbound.stop()
 			outbound.disconnect()
 			ru.penik.voice.plus.plugins.SvcConnectionManager.reset()
+			val mcVer = client?.launchedVersion ?: "unknown"
+			ru.penik.voice.plus.util.MetricsReporter.endSession(mcVer)
 		}
 	}
 }

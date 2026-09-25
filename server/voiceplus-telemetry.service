@@ -1,0 +1,18 @@
+[Unit]
+Description=VoicePlus Anonymous Telemetry Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/voiceplus-telemetry
+ExecStart=/opt/voiceplus-telemetry/voiceplus-telemetry-server
+Restart=always
+RestartSec=5
+Environment=HOST=127.0.0.1
+Environment=PORT=8080
+Environment=DATABASE_PATH=/opt/voiceplus-telemetry/telemetry.db
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target
