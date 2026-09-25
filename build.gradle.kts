@@ -23,7 +23,9 @@ repositories {
 	}
 }
 
-val mcVersion = providers.gradleProperty("minecraft_version").get()
+fun prop(name: String): String = project.findProperty(name)?.toString() ?: error("Missing property $name")
+
+val mcVersion = prop("minecraft_version")
 val isUnobfuscated = mcVersion.startsWith("26.")
 
 dependencies {
@@ -32,13 +34,13 @@ dependencies {
 	if (!isUnobfuscated) {
 		mappings(loom.officialMojangMappings())
 	}
-	modImplementation("net.fabricmc:fabric-loader:${providers.gradleProperty("loader_version").get()}")
+	modImplementation("net.fabricmc:fabric-loader:${prop("loader_version")}")
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation("net.fabricmc.fabric-api:fabric-api:${providers.gradleProperty("fabric_api_version").get()}")
-	modImplementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
+	modImplementation("net.fabricmc.fabric-api:fabric-api:${prop("fabric_api_version")}")
+	modImplementation("net.fabricmc:fabric-language-kotlin:${prop("fabric_kotlin_version")}")
 
-	modCompileOnly("maven.modrinth:simple-voice-chat:${providers.gradleProperty("svc_version").get()}")
+	modCompileOnly("maven.modrinth:simple-voice-chat:${prop("svc_version")}")
 
 	implementation("su.plo.voice:protocol:2.1.10")
 	include("su.plo.voice:protocol:2.1.10")
