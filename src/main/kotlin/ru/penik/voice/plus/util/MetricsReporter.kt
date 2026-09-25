@@ -27,6 +27,11 @@ object MetricsReporter {
         }
     }
 
+    private val javaMajorVersion: String by lazy {
+        val version = System.getProperty("java.version", "unknown")
+        version.split(".").firstOrNull() ?: version
+    }
+
     private fun getFullModVersion(mcVersion: String): String {
         return try {
             net.fabricmc.loader.api.FabricLoader.getInstance()
