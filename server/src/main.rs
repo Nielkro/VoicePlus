@@ -1,7 +1,7 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse, Json},
+    extract::{Query, State},
+    http::{HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -13,7 +13,12 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
-type DbState = Arc<Mutex<Connection>>;
+struct AppState {
+    db: Mutex<Connection>,
+    auth_token: Option<String>,
+}
+
+type SharedState = Arc<AppState>;
 
 #[derive(Debug, Deserialize)]
 struct MetricPayload {
@@ -25,6 +30,11 @@ struct MetricPayload {
     uses_socks: Option<bool>,
     duration_bucket: Option<String>,
     duration_seconds: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AuthQuery {
+    token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,7 +82,17 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_mc_version ON events(mc_version);"
     ).expect("Failed to initialize database schema");
 
-    let state: DbState = Arc::new(Mutex::new(conn));
+    let auth_token = std::env::var("AUTH_TOKEN").ok().filter(|s| !s.trim().is_empty());
+    if auth_token.is_some() {
+        println!("Dashboard and Stats API are protected by AUTH_TOKEN");
+    } else {
+        println!("WARNING: AUTH_TOKEN is not set. Dashboard is currently public. Set AUTH_TOKEN=your_secret to protect it.");
+    }
+
+    let state: SharedState = Arc::new(AppState {
+        db: Mutex::new(conn),
+        auth_token,
+    });
 
     let app = Router::new()
         .route("/", get(dashboard_handler))
@@ -101,11 +121,49 @@ async fn health_handler() -> &'static str {
     "OK"
 }
 
+fn is_authorized(headers: &HeaderMap, query: &AuthQuery, required_token: &Option<String>) -> bool {
+    let expected = match required_token {
+        Some(token) => token,
+        None => return true, // No auth configured
+    };
+
+    if let Some(ref q_token) = query.token {
+        if q_token == expected {
+            return true;
+        }
+    }
+
+    if let Some(auth_header) = headers.get("Authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer ") {
+                let token = auth_str.trim_start_matches("Bearer ").trim();
+                if token == expected {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if let Some(token_header) = headers.get("X-Auth-Token") {
+        if let Ok(token_str) = token_header.to_str() {
+            if token_str == expected {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 async fn record_metric_handler(
-    State(db): State<DbState>,
+    State(state): State<SharedState>,
     Json(payload): Json<MetricPayload>,
 ) -> impl IntoResponse {
-    let conn = db.lock().await;
+    if payload.event != "launch" && payload.event != "session_ended" {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "invalid_event" })));
+    }
+
+    let conn = state.db.lock().await;
 
     let event_type = payload.event;
     let mod_ver = payload.mod_version.unwrap_or_else(|| "unknown".to_string());
@@ -115,6 +173,11 @@ async fn record_metric_handler(
     let uses_socks = if payload.uses_socks.unwrap_or(false) { 1 } else { 0 };
     let duration_bucket = payload.duration_bucket;
     let duration_seconds = payload.duration_seconds;
+
+    // Safety checks against spam
+    if mod_ver.len() > 32 || mc_ver.len() > 32 || os.len() > 32 || java_ver.len() > 32 {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "payload_too_large" })));
+    }
 
     let res = conn.execute(
         "INSERT INTO events (event_type, mod_version, mc_version, os, java_version, uses_socks, duration_bucket, duration_seconds)
@@ -131,8 +194,19 @@ async fn record_metric_handler(
     }
 }
 
-async fn get_stats_handler(State(db): State<DbState>) -> impl IntoResponse {
-    let conn = db.lock().await;
+async fn get_stats_handler(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Query(query): Query<AuthQuery>,
+) -> Response {
+    if !is_authorized(&headers, &query, &state.auth_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized: invalid or missing token" })),
+        ).into_response();
+    }
+
+    let conn = state.db.lock().await;
 
     let total_launches: i64 = conn
         .query_row("SELECT COUNT(*) FROM events WHERE event_type = 'launch'", [], |r| r.get(0))
@@ -224,7 +298,7 @@ async fn get_stats_handler(State(db): State<DbState>) -> impl IntoResponse {
         socks_count,
         direct_count,
         daily_trend,
-    })
+    }).into_response()
 }
 
 async fn dashboard_handler() -> Html<&'static str> {
@@ -258,6 +332,22 @@ async fn dashboard_handler() -> Html<&'static str> {
     </style>
 </head>
 <body class="p-6 md:p-10 min-h-screen">
+    <!-- Auth Modal if unauthorized -->
+    <div id="auth-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-cardBg border border-slate-700 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h2 class="text-xl font-bold text-slate-100">🔒 Access Restricted</h2>
+            <p class="text-sm text-slate-400">This dashboard requires an administrator access token.</p>
+            <div>
+                <input type="password" id="token-input" placeholder="Enter AUTH_TOKEN" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="saveToken()" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm text-white font-medium transition">
+                    Unlock Dashboard
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="max-w-7xl mx-auto space-y-8">
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-6 gap-4">
@@ -270,8 +360,11 @@ async fn dashboard_handler() -> Html<&'static str> {
             <div class="flex items-center gap-3">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
                     <span class="w-2 h-2 mr-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                    Zero Personal Data / GDPR Clean
+                    Protected & Private
                 </span>
+                <button onclick="logoutToken()" title="Change access token" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs text-slate-300 transition">
+                    🔑 Key
+                </button>
                 <button onclick="loadStats()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm text-slate-200 transition">
                     Refresh
                 </button>
@@ -350,7 +443,7 @@ async fn dashboard_handler() -> Html<&'static str> {
                 <div class="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400 space-y-1">
                     <div>• <strong>Zero Persistent ID:</strong> Every event is standalone.</div>
                     <div>• <strong>Bucketized Durations:</strong> Raw seconds are grouped to avoid fingerprinting.</div>
-                    <div>• <strong>Opt-Out:</strong> Players can disable telemetry via in-game config or properties.</div>
+                    <div>• <strong>Token-Protected:</strong> Analytics are private to the server administrator.</div>
                 </div>
             </div>
         </div>
@@ -358,12 +451,43 @@ async fn dashboard_handler() -> Html<&'static str> {
 
     <script>
         let charts = {};
-
         const palette = ['#38bdf8', '#34d399', '#a78bfa', '#fb923c', '#f472b6', '#facc15', '#94a3b8'];
 
+        function getToken() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('token') || localStorage.getItem('vp_auth_token') || '';
+        }
+
+        function saveToken() {
+            const val = document.getElementById('token-input').value.trim();
+            if (val) {
+                localStorage.setItem('vp_auth_token', val);
+                document.getElementById('auth-modal').classList.add('hidden');
+                loadStats();
+            }
+        }
+
+        function logoutToken() {
+            localStorage.removeItem('vp_auth_token');
+            document.getElementById('token-input').value = '';
+            document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
         async function loadStats() {
+            const token = getToken();
+            const headers = {};
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+            }
+
             try {
-                const res = await fetch('/api/v1/stats');
+                const res = await fetch('/api/v1/stats', { headers });
+                if (res.status === 401) {
+                    document.getElementById('auth-modal').classList.remove('hidden');
+                    return;
+                }
+                document.getElementById('auth-modal').classList.add('hidden');
+
                 const data = await res.json();
 
                 document.getElementById('val-total-launches').innerText = data.total_launches.toLocaleString();
