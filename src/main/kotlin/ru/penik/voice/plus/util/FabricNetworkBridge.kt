@@ -5,7 +5,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
-//? if <26.1 {
+//? if <=1.21.4 {
 import net.minecraft.resources.ResourceLocation
 //?} else {
 /*import net.minecraft.resources.Identifier*/
@@ -15,7 +15,7 @@ class PlasmoVoicePayload(val data: ByteArray) : CustomPacketPayload {
     override fun type(): CustomPacketPayload.Type<PlasmoVoicePayload> = TYPE
 
     companion object {
-        //? if <26.1 {
+        //? if <=1.21.4 {
         val ID: ResourceLocation = ResourceLocation.fromNamespaceAndPath("plasmo", "voice/v2")
         //?} else {
         /*val ID: Identifier = Identifier.fromNamespaceAndPath("plasmo", "voice/v2")*/
