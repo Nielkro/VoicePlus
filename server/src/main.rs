@@ -217,7 +217,7 @@ async fn get_stats_handler(
         .unwrap_or(0);
 
     let mut mc_versions = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare("SELECT mc_version, COUNT(*) FROM events GROUP BY mc_version") {
+    if let Ok(mut stmt) = conn.prepare("SELECT mc_version, COUNT(*) FROM events WHERE event_type = 'launch' GROUP BY mc_version") {
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
         if let Ok(rows) = rows {
             for row in rows.flatten() {
@@ -227,7 +227,7 @@ async fn get_stats_handler(
     }
 
     let mut mod_versions = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare("SELECT mod_version, COUNT(*) FROM events GROUP BY mod_version") {
+    if let Ok(mut stmt) = conn.prepare("SELECT mod_version, COUNT(*) FROM events WHERE event_type = 'launch' GROUP BY mod_version") {
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
         if let Ok(rows) = rows {
             for row in rows.flatten() {
@@ -237,7 +237,7 @@ async fn get_stats_handler(
     }
 
     let mut os_breakdown = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare("SELECT os, COUNT(*) FROM events GROUP BY os") {
+    if let Ok(mut stmt) = conn.prepare("SELECT os, COUNT(*) FROM events WHERE event_type = 'launch' GROUP BY os") {
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
         if let Ok(rows) = rows {
             for row in rows.flatten() {
@@ -247,7 +247,7 @@ async fn get_stats_handler(
     }
 
     let mut duration_buckets = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare("SELECT duration_bucket, COUNT(*) FROM events WHERE duration_bucket IS NOT NULL GROUP BY duration_bucket") {
+    if let Ok(mut stmt) = conn.prepare("SELECT duration_bucket, COUNT(*) FROM events WHERE event_type = 'session_ended' AND duration_bucket IS NOT NULL GROUP BY duration_bucket") {
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
         if let Ok(rows) = rows {
             for row in rows.flatten() {
@@ -257,11 +257,11 @@ async fn get_stats_handler(
     }
 
     let socks_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM events WHERE uses_socks = 1", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM events WHERE event_type = 'launch' AND uses_socks = 1", [], |r| r.get(0))
         .unwrap_or(0);
 
     let direct_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM events WHERE uses_socks = 0", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM events WHERE event_type = 'launch' AND uses_socks = 0", [], |r| r.get(0))
         .unwrap_or(0);
 
     let mut daily_trend = Vec::new();
