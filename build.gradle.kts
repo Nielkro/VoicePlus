@@ -99,6 +99,10 @@ java {
 	targetCompatibility = if (isUnobfuscated) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
 }
 
+base {
+	archivesName.set("voice-plus-pv2svc-${project.name}")
+}
+
 tasks.jar {
 	val projectName = project.name
 	inputs.property("projectName", projectName)
