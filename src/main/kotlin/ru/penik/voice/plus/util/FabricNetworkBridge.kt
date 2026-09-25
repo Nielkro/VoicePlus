@@ -26,20 +26,26 @@ object FabricNetworkBridge {
             ) ?: throw ClassNotFoundException("Could not find CustomPacketPayload class")
             payloadInterface = payloadClass
 
-            // 2. Locate Type / Id class inside CustomPacketPayload
-            val typeClass = payloadClass.declaredClasses.firstOrNull()
+            // 2. Locate Type / Id class inside CustomPacketPayload (specifically Type or Id, not anonymous class)
+            val typeClass = payloadClass.declaredClasses.firstOrNull { it.simpleName in listOf("Type", "Id") }
                 ?: findClass(
                     "net.minecraft.network.protocol.common.custom.CustomPacketPayload\$Type",
                     "net.minecraft.network.protocol.common.custom.CustomPacketPayload\$Id",
+                    "net.minecraft.network.packet.CustomPayload\$Id",
                     "net.minecraft.class_8710\$class_9154"
-                ) ?: throw ClassNotFoundException("Could not find CustomPacketPayload.Type class")
+                ) ?: throw ClassNotFoundException("Could not find CustomPacketPayload.Type/Id class")
+
+            LOGGER.info("Using CustomPacketPayload Type class: ${typeClass.name}")
 
             // 3. Create Type instance: new CustomPacketPayload.Type<>(channelId)
-            val typeConstructor = typeClass.declaredConstructors.firstOrNull { it.parameterCount == 1 }
-                ?: throw NoSuchMethodException("Could not find Type constructor")
+            val typeConstructor = typeClass.declaredConstructors.firstOrNull {
+                it.parameterCount == 1 && it.parameterTypes[0].isAssignableFrom(channelId.javaClass)
+            } ?: typeClass.declaredConstructors.firstOrNull { it.parameterCount == 1 }
+              ?: throw NoSuchMethodException("Could not find Type constructor with 1 param")
             typeConstructor.isAccessible = true
             val payloadType = typeConstructor.newInstance(channelId)
             payloadTypeInstance = payloadType
+            LOGGER.info("Created payloadType instance: $payloadType")
 
             // 4. Create dynamic StreamCodec proxy
             val streamCodecInterface = findClass(
@@ -50,7 +56,7 @@ object FabricNetworkBridge {
             val streamCodecProxy = Proxy.newProxyInstance(
                 streamCodecInterface.classLoader,
                 arrayOf(streamCodecInterface)
-            ) { _, method, args ->
+            ) { proxy, method, args ->
                 when (method.name) {
                     "encode" -> {
                         val buf = args[0]
@@ -77,26 +83,41 @@ object FabricNetworkBridge {
                         readBytesMethod?.invoke(buf, bytes)
                         createPayloadProxy(bytes)
                     }
-                    else -> method.defaultValue
+                    "hashCode" -> System.identityHashCode(proxy)
+                    "equals" -> args?.getOrNull(0) === proxy
+                    "toString" -> "DynamicStreamCodec"
+                    else -> null
                 }
             }
 
-            // 5. Register in PayloadTypeRegistry
+            // 5. Register in PayloadTypeRegistry (register across play and config phases)
             val registryClass = Class.forName("net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry")
-            val s2cMethod = registryClass.methods.firstOrNull { it.name in listOf("clientboundPlay", "playS2C") && it.parameterCount == 0 }
-            val c2sMethod = registryClass.methods.firstOrNull { it.name in listOf("serverboundPlay", "playC2S") && it.parameterCount == 0 }
-
-            val s2c = s2cMethod?.invoke(null)
-            val c2s = c2sMethod?.invoke(null)
-
             val regMethod = registryClass.methods.firstOrNull { it.name == "register" && it.parameterCount == 2 }
-            if (regMethod != null) {
-                regMethod.isAccessible = true
-                if (s2c != null) regMethod.invoke(s2c, payloadType, streamCodecProxy)
-                if (c2s != null) regMethod.invoke(c2s, payloadType, streamCodecProxy)
-                LOGGER.info("Registered network payload dynamically via ${s2cMethod?.name}/${c2sMethod?.name}")
-            } else {
-                LOGGER.error("Could not find register method on PayloadTypeRegistry")
+                ?: throw NoSuchMethodException("Could not find register method on PayloadTypeRegistry")
+            regMethod.isAccessible = true
+
+            val s2cMethods = listOf("playS2C", "clientboundPlay", "configurationS2C", "clientboundConfiguration")
+            for (mName in s2cMethods) {
+                val m = registryClass.methods.firstOrNull { it.name == mName && it.parameterCount == 0 }
+                if (m != null) {
+                    val reg = m.invoke(null)
+                    if (reg != null) {
+                        regMethod.invoke(reg, payloadType, streamCodecProxy)
+                        LOGGER.info("Registered network payload on PayloadTypeRegistry.$mName")
+                    }
+                }
+            }
+
+            val c2sMethods = listOf("playC2S", "serverboundPlay", "configurationC2S", "serverboundConfiguration")
+            for (mName in c2sMethods) {
+                val m = registryClass.methods.firstOrNull { it.name == mName && it.parameterCount == 0 }
+                if (m != null) {
+                    val reg = m.invoke(null)
+                    if (reg != null) {
+                        regMethod.invoke(reg, payloadType, streamCodecProxy)
+                        LOGGER.info("Registered network payload on PayloadTypeRegistry.$mName")
+                    }
+                }
             }
 
             // 6. Register receiver in ClientPlayNetworking
