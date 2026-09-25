@@ -17,8 +17,6 @@ object FabricNetworkBridge {
 
     fun init(namespace: String, path: String, onPacketReceived: (ByteArray) -> Unit) {
         try {
-            val channelId = createIdentifier(namespace, path)
-
             // 1. Locate CustomPacketPayload interface
             val payloadClass = findClass(
                 "net.minecraft.network.protocol.common.custom.CustomPacketPayload",
@@ -35,17 +33,22 @@ object FabricNetworkBridge {
                     "net.minecraft.class_8710\$class_9154"
                 ) ?: throw ClassNotFoundException("Could not find CustomPacketPayload.Type/Id class")
 
-            LOGGER.info("Using CustomPacketPayload Type class: ${typeClass.name}")
+            println("[VoicePlus] Using CustomPacketPayload Type class: ${typeClass.name}")
 
-            // 3. Create Type instance: new CustomPacketPayload.Type<>(channelId)
-            val typeConstructor = typeClass.declaredConstructors.firstOrNull {
-                it.parameterCount == 1 && it.parameterTypes[0].isAssignableFrom(channelId.javaClass)
-            } ?: typeClass.declaredConstructors.firstOrNull { it.parameterCount == 1 }
-              ?: throw NoSuchMethodException("Could not find Type constructor with 1 param")
+            // 3. Find constructor of Type(Identifier)
+            val typeConstructor = typeClass.declaredConstructors.firstOrNull { it.parameterCount == 1 }
+                ?: throw NoSuchMethodException("Could not find Type constructor with 1 parameter")
             typeConstructor.isAccessible = true
+
+            val expectedIdClass = typeConstructor.parameterTypes[0]
+            println("[VoicePlus] Expected Identifier class from constructor: ${expectedIdClass.name}")
+
+            val channelId = createIdentifierOfClass(expectedIdClass, namespace, path)
+            println("[VoicePlus] Instantiated channelId: $channelId (${channelId.javaClass.name})")
+
             val payloadType = typeConstructor.newInstance(channelId)
             payloadTypeInstance = payloadType
-            LOGGER.info("Created payloadType instance: $payloadType")
+            println("[VoicePlus] Created payloadType instance: $payloadType")
 
             // 4. Create dynamic StreamCodec proxy
             val streamCodecInterface = findClass(
@@ -194,18 +197,12 @@ object FabricNetworkBridge {
         )
     }
 
-    private fun createIdentifier(namespace: String, path: String): Any {
-        val idClass = findClass(
-            "net.minecraft.resources.ResourceLocation",
-            "net.minecraft.resources.Identifier",
-            "net.minecraft.util.Identifier",
-            "net.minecraft.class_2960"
-        ) ?: throw ClassNotFoundException("Could not find Identifier/ResourceLocation class")
-
+    private fun createIdentifierOfClass(idClass: Class<*>, namespace: String, path: String): Any {
         val fromNsMethod = idClass.methods.firstOrNull {
             it.name in listOf("fromNamespaceAndPath", "of", "tryBuild", "tryCreate") && it.parameterCount == 2
         }
         if (fromNsMethod != null) {
+            fromNsMethod.isAccessible = true
             return fromNsMethod.invoke(null, namespace, path)
         }
 
@@ -225,7 +222,7 @@ object FabricNetworkBridge {
             return ctor1.newInstance("$namespace:$path")
         }
 
-        error("Could not construct Identifier for $namespace:$path")
+        error("Could not construct Identifier of class ${idClass.name} for $namespace:$path")
     }
 
     private fun findClass(vararg names: String): Class<*>? {
